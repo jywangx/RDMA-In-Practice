@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(MyApp)
+project(PingPong)
 
 # 设置 C/C++ 编译器和编译选项
 set(CMAKE_C_COMPILER gcc)  # C 编译器

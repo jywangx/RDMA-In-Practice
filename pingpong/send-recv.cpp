@@ -16,6 +16,7 @@ static void usage(const char *argv0) {
 
 int main(int argc, char *argv[]) {
     int          ret           = 0;
+    int          mtu           = 1024;
     int          port          = 18515;
     int          send_flags    = IBV_ACCESS_LOCAL_WRITE;
     int          access_flags  = IBV_ACCESS_LOCAL_WRITE;
@@ -33,18 +34,22 @@ int main(int argc, char *argv[]) {
 
         static struct option long_options[] = {
 			{ .name = "port",     .has_arg = 1, .val = 'p' },
+			{ .name = "mtu",      .has_arg = 1, .val = 'm' },
 			{ .name = "ib-dev",   .has_arg = 1, .val = 'd' },
 			{ .name = "gid-idx",  .has_arg = 1, .val = 'g' },
 			{}
 		};
 
-        c = getopt_long(argc, argv, "p:d:i:g:", long_options, NULL);
+        c = getopt_long(argc, argv, "p:d:i:g:m:", long_options, NULL);
         if (c == -1) break;
 
         switch (c) {
         case 'p':
             port = strtol(optarg, NULL, 0);
             break;
+        case 'm':
+			mtu = strtol(optarg, NULL, 0);
+			break;
         case 'd':
             ib_devname = optarg;
             break;
@@ -79,7 +84,7 @@ int main(int argc, char *argv[]) {
     memset(buf, 0x7b, size);
 
     RDMAEndpoint ep = RDMAEndpoint(
-        ib_devname, gid_idx, buf, size, 1, 5
+        ib_devname, gid_idx, buf, size, 1, 5, mtu
     );
 
     ep.connectToPeer(server_name, port);

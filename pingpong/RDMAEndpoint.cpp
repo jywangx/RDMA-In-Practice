@@ -11,7 +11,7 @@ const char* RDMAEpException::what() const noexcept {
 }
 
 RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
-                           unsigned int size, int txDepth, int rxDepth) {
+                           unsigned int size, int txDepth, int rxDepth, int mtu) {
     int                numDevices;
     ibv_device       **devList      = nullptr;
     ibv_device        *ibDev        = nullptr;
@@ -21,6 +21,26 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
     this->txDepth = txDepth;
     this->rxDepth = rxDepth;
     this->gidIdx  = gidIdx;
+
+    switch(mtu) {
+        case 256:
+            this->mtu = IBV_MTU_256;
+            break;
+        case 512:
+            this->mtu = IBV_MTU_512;
+            break;
+        case 1024:
+            this->mtu = IBV_MTU_1024;
+            break;
+        case 2048:
+            this->mtu = IBV_MTU_2048;
+            break;
+        case 4096:
+            this->mtu = IBV_MTU_4096;
+            break;
+        default:
+            throw std::runtime_error("Invalid MTU: " + std::to_string(mtu));
+    }
 
     devList = ibv_get_device_list(&numDevices);
     if (nullptr == devList) {
@@ -168,7 +188,7 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
 void RDMAEndpoint::connect_qp() {
     ibv_qp_attr attr = {
         .qp_state		    = IBV_QPS_RTR,
-        .path_mtu		    = IBV_MTU_1024,
+        .path_mtu		    = this->mtu,
         .rq_psn			    = this->remoteIBAddr.psn,
         .dest_qp_num	    = this->remoteIBAddr.qpn,
         .ah_attr		    = {

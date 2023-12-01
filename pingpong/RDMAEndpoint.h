@@ -50,6 +50,7 @@ private:
     ibv_mr      *ibMR  = nullptr;
     ibv_cq      *ibCQ  = nullptr;
     ibv_qp      *ibQP  = nullptr;
+    ibv_mtu      mtu;
     struct ibAddrInfo {
         int lid;
         int qpn;
@@ -65,7 +66,7 @@ private:
 
 public:
     RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
-                 unsigned int size, int txDepth, int rxDepth);
+                 unsigned int size, int txDepth, int rxDepth, int mtu);
 
     void connectToPeer(std::string peerHost, int peerPort);
 

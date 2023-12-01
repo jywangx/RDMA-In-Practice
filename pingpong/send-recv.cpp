@@ -18,8 +18,6 @@ int main(int argc, char *argv[]) {
     int          ret           = 0;
     int          mtu           = 1024;
     int          port          = 18515;
-    int          send_flags    = IBV_ACCESS_LOCAL_WRITE;
-    int          access_flags  = IBV_ACCESS_LOCAL_WRITE;
 	int   	     gid_idx;
     unsigned int size          = 8;
     void        *buf           = nullptr;  
@@ -74,7 +72,6 @@ int main(int argc, char *argv[]) {
     }
 
     int page_size = sysconf(_SC_PAGESIZE);
-    send_flags = IBV_SEND_SIGNALED;
     /* 分配页对齐的内存 */
     buf = aligned_alloc(page_size, size);
     if (buf == nullptr) {

@@ -25,10 +25,10 @@ public:
 class RDMAEndpoint {
 private:
     /* Endpoint related members */
-    void* buf         = nullptr;
-    unsigned int size = -1;
-    int txDepth       = -1;
-    int rxDepth       = -1;
+    void* buf          = nullptr;
+    unsigned int size  = -1;
+    int txDepth        = -1;
+    int rxDepth        = -1;
     std::unordered_map<int, std::queue<ibv_wc>> wcQueueMap;
     enum class EndpointStatus {
         INIT,
@@ -42,6 +42,7 @@ private:
     };
 
     /* IB related members */
+    int ibSL           = 1;
     int ibPort         = 1;
     int sendFlags      = IBV_ACCESS_LOCAL_WRITE;
     int gidIdx         = -1;
@@ -66,7 +67,8 @@ private:
 
 public:
     RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
-                 unsigned int size, int txDepth, int rxDepth, int mtu);
+                 unsigned int size, int txDepth, int rxDepth, 
+                 int mtu, int sl);
 
     void connectToPeer(std::string peerHost, int peerPort);
 

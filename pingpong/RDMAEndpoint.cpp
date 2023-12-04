@@ -11,16 +11,18 @@ const char* RDMAEpException::what() const noexcept {
 }
 
 RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
-                           unsigned int size, int txDepth, int rxDepth, int mtu) {
+                           unsigned int size, int txDepth, int rxDepth, 
+                           int mtu, int sl) {
     int                numDevices;
     ibv_device       **devList      = nullptr;
     ibv_device        *ibDev        = nullptr;
 
-    this->buf     = buf;
-    this->size    = size;
-    this->txDepth = txDepth;
-    this->rxDepth = rxDepth;
-    this->gidIdx  = gidIdx;
+    this->ibSL         = sl;
+    this->buf          = buf;
+    this->size         = size;
+    this->txDepth      = txDepth;
+    this->rxDepth      = rxDepth;
+    this->gidIdx       = gidIdx;
 
     switch(mtu) {
         case 256:
@@ -109,8 +111,8 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
             .send_cq = this->ibCQ,
             .recv_cq = this->ibCQ,
             .cap     = {
-                .max_send_wr  = 1,
-                .max_recv_wr  = rxDepth,
+                .max_send_wr  = this->txDepth,
+                .max_recv_wr  = this->rxDepth,
                 .max_send_sge = 1,
                 .max_recv_sge = 1
             },
@@ -193,7 +195,7 @@ void RDMAEndpoint::connect_qp() {
         .dest_qp_num	    = this->remoteIBAddr.qpn,
         .ah_attr		    = {
             .dlid		    = this->remoteIBAddr.lid,
-            .sl		        = 0,
+            .sl		        = this->ibSL,
             .src_path_bits  = 0,
             .is_global	    = 0,
             .port_num	    = this->ibPort

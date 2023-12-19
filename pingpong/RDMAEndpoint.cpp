@@ -12,7 +12,7 @@ const char* RDMAEpException::what() const noexcept {
 
 RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
                            unsigned int size, int txDepth, int rxDepth, 
-                           int mtu, int sl) {
+                           int mtu, int sl, bool useODP) {
     int                numDevices;
     ibv_device       **devList      = nullptr;
     ibv_device        *ibDev        = nullptr;
@@ -23,6 +23,7 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
     this->txDepth      = txDepth;
     this->rxDepth      = rxDepth;
     this->gidIdx       = gidIdx;
+    this->useODP       = useODP;
 
     switch(mtu) {
         case 256:
@@ -83,8 +84,23 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
         throw std::runtime_error("Couldn't allocate PD");
     }
 
+    if (this->useODP) {
+        const uint32_t rc_caps_mask = IBV_ODP_SUPPORT_SEND |
+					                  IBV_ODP_SUPPORT_RECV;
+		ibv_device_attr_ex attrx;
+
+		if (ibv_query_device_ex(this->ibCtx, NULL, &attrx)) {
+            throw std::runtime_error("Couldn't query device for its features");
+		}
+        if (!(attrx.odp_caps.general_caps & IBV_ODP_SUPPORT) ||
+            (attrx.odp_caps.per_transport_caps.rc_odp_caps & rc_caps_mask) != rc_caps_mask) {
+             throw std::runtime_error("The device isn't ODP capable or does not support RC send and receive with ODP");
+        }
+        this->accessFlags |= IBV_ACCESS_ON_DEMAND;
+    }
+
     /* 注册Memory Region */
-    this->ibMR = ibv_reg_mr(this->ibPD, buf, size, IBV_ACCESS_LOCAL_WRITE);
+    this->ibMR = ibv_reg_mr(this->ibPD, buf, size, this->accessFlags);
     if (nullptr == this->ibMR) {
         ibv_dealloc_pd(ibPD);
         ibv_close_device(this->ibCtx);

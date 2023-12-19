@@ -42,10 +42,12 @@ private:
     };
 
     /* IB related members */
-    int ibSL           = 1;
-    int ibPort         = 1;
-    int sendFlags      = IBV_ACCESS_LOCAL_WRITE;
-    int gidIdx         = -1;
+    int  ibSL          = 1;
+    int  ibPort        = 1;
+    int  accessFlags   = IBV_ACCESS_LOCAL_WRITE;
+    int  sendFlags     = IBV_ACCESS_LOCAL_WRITE;
+    int  gidIdx        = -1;
+    bool useODP        = false;
     ibv_context *ibCtx = nullptr;
     ibv_pd      *ibPD  = nullptr;
     ibv_mr      *ibMR  = nullptr;
@@ -68,7 +70,7 @@ private:
 public:
     RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
                  unsigned int size, int txDepth, int rxDepth, 
-                 int mtu, int sl);
+                 int mtu, int sl, bool useODP);
 
     void connectToPeer(std::string peerHost, int peerPort);
 

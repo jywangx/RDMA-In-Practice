@@ -15,7 +15,7 @@ static void usage(const char *argv0) {
 	printf("  -i, --ib-port=<port>   use port <port> of IB device (default 1)\n");
 	printf("  -l, --sl=<sl>          service level value\n");
 	printf("  -e, --events           sleep on CQ events (default poll)\n");
-	printf("  -o, --odp		         use on demand paging\n");
+	printf("  -o, --odp              use on demand paging\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -24,6 +24,7 @@ int main(int argc, char *argv[]) {
     int          mtu           = 1024;
     int          port          = 18515;
 	int   	     gid_idx       = 0;
+    bool         use_odp       = false;
     unsigned int size          = 8;
     void        *buf           = nullptr;  
     std::string  ib_devname    = "";
@@ -65,6 +66,9 @@ int main(int argc, char *argv[]) {
 		case 'g':
 			gid_idx = strtol(optarg, NULL, 0);
 			break;
+		case 'o':
+			use_odp = true;
+			break;
         default:
             usage(argv[0]);
             return 1;
@@ -92,7 +96,7 @@ int main(int argc, char *argv[]) {
     memset(buf, 0x7b, size);
 
     RDMAEndpoint ep = RDMAEndpoint(
-        ib_devname, gid_idx, buf, size, 1, 5, mtu, sl
+        ib_devname, gid_idx, buf, size, 1, 5, mtu, sl, use_odp
     );
 
     ep.connectToPeer(server_name, port);

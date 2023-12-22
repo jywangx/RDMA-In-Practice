@@ -74,6 +74,8 @@ public:
                  unsigned int size, int txDepth, int rxDepth, 
                  int mtu, int sl, bool useODP, bool useEvent);
 
+    ~RDMAEndpoint();
+
     void connectToPeer(std::string peerHost, int peerPort);
 
     void postSend();

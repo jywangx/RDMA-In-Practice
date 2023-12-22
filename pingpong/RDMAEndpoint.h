@@ -25,10 +25,10 @@ public:
 class RDMAEndpoint {
 private:
     /* Endpoint related members */
-    void* buf         = nullptr;
-    unsigned int size = -1;
-    int txDepth       = -1;
-    int rxDepth       = -1;
+    void* buf          = nullptr;
+    unsigned int size  = -1;
+    int txDepth        = -1;
+    int rxDepth        = -1;
     std::unordered_map<int, std::queue<ibv_wc>> wcQueueMap;
     enum class EndpointStatus {
         INIT,
@@ -42,15 +42,20 @@ private:
     };
 
     /* IB related members */
-    int ibPort         = 1;
-    int sendFlags      = IBV_ACCESS_LOCAL_WRITE;
-    int gidIdx         = -1;
-    ibv_context *ibCtx = nullptr;
-    ibv_pd      *ibPD  = nullptr;
-    ibv_mr      *ibMR  = nullptr;
-    ibv_cq      *ibCQ  = nullptr;
-    ibv_qp      *ibQP  = nullptr;
-    ibv_mtu      mtu;
+    int  ibSL          = 1;
+    int  ibPort        = 1;
+    int  accessFlags   = IBV_ACCESS_LOCAL_WRITE;
+    int  sendFlags     = IBV_ACCESS_LOCAL_WRITE;
+    int  gidIdx        = -1;
+    bool useODP        = false;
+    bool useEvent      = false;
+    ibv_context      *ibCtx = nullptr;
+    ibv_pd           *ibPD  = nullptr;
+    ibv_mr           *ibMR  = nullptr;
+    ibv_cq           *ibCQ  = nullptr;
+    ibv_qp           *ibQP  = nullptr;
+    ibv_mtu           mtu;
+    ibv_comp_channel *ibCompChannel = nullptr;
     struct ibAddrInfo {
         int lid;
         int qpn;
@@ -66,7 +71,8 @@ private:
 
 public:
     RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
-                 unsigned int size, int txDepth, int rxDepth, int mtu);
+                 unsigned int size, int txDepth, int rxDepth, 
+                 int mtu, int sl, bool useODP, bool useEvent);
 
     void connectToPeer(std::string peerHost, int peerPort);
 

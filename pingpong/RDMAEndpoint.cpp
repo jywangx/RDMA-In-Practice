@@ -11,16 +11,40 @@ const char* RDMAEpException::what() const noexcept {
 }
 
 RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
-                           unsigned int size, int txDepth, int rxDepth, int mtu) {
+                           unsigned int size, int txDepth, int rxDepth, 
+                           int mtu, int sl, bool useODP, bool useEvent) {
     int                numDevices;
     ibv_device       **devList      = nullptr;
     ibv_device        *ibDev        = nullptr;
 
-    this->buf     = buf;
-    this->size    = size;
-    this->txDepth = txDepth;
-    this->rxDepth = rxDepth;
-    this->gidIdx  = gidIdx;
+    this->ibSL         = sl;
+    this->buf          = buf;
+    this->size         = size;
+    this->txDepth      = txDepth;
+    this->rxDepth      = rxDepth;
+    this->gidIdx       = gidIdx;
+    this->useODP       = useODP;
+    this->useODP       = useODP;
+
+    switch(mtu) {
+        case 256:
+            this->mtu = IBV_MTU_256;
+            break;
+        case 512:
+            this->mtu = IBV_MTU_512;
+            break;
+        case 1024:
+            this->mtu = IBV_MTU_1024;
+            break;
+        case 2048:
+            this->mtu = IBV_MTU_2048;
+            break;
+        case 4096:
+            this->mtu = IBV_MTU_4096;
+            break;
+        default:
+            throw std::runtime_error("Invalid MTU: " + std::to_string(mtu));
+    }
 
     switch(mtu) {
         case 256:
@@ -71,20 +95,47 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
         this->endpointStatus = EndpointStatus::FAIL;
         throw std::runtime_error("Fail to open IB device");
     }
+    
+    if (this->useEvent) {
+        this->ibCompChannel = ibv_create_comp_channel(this->ibCtx);
+        if (this->ibCompChannel == nullptr) {
+            ibv_close_device(this->ibCtx);
+            ibv_free_device_list(devList);
+            this->endpointStatus = EndpointStatus::FAIL;
+            throw std::runtime_error("Fail to create completion channel");
+        }
+    }
 
     /* 分配Protection Domain */
     this->ibPD = ibv_alloc_pd(this->ibCtx);
     if (nullptr == this->ibPD) {
+        if (this->useEvent) ibv_destroy_comp_channel(this->ibCompChannel);
         ibv_close_device(this->ibCtx);
         ibv_free_device_list(devList);
         this->endpointStatus = EndpointStatus::FAIL;
         throw std::runtime_error("Couldn't allocate PD");
     }
 
+    if (this->useODP) {
+        const uint32_t rc_caps_mask = IBV_ODP_SUPPORT_SEND |
+					                  IBV_ODP_SUPPORT_RECV;
+		ibv_device_attr_ex attrx;
+
+		if (ibv_query_device_ex(this->ibCtx, NULL, &attrx)) {
+            throw std::runtime_error("Couldn't query device for its features");
+		}
+        if (!(attrx.odp_caps.general_caps & IBV_ODP_SUPPORT) ||
+            (attrx.odp_caps.per_transport_caps.rc_odp_caps & rc_caps_mask) != rc_caps_mask) {
+             throw std::runtime_error("The device isn't ODP capable or does not support RC send and receive with ODP");
+        }
+        this->accessFlags |= IBV_ACCESS_ON_DEMAND;
+    }
+
     /* 注册Memory Region */
-    this->ibMR = ibv_reg_mr(this->ibPD, buf, size, IBV_ACCESS_LOCAL_WRITE);
+    this->ibMR = ibv_reg_mr(this->ibPD, buf, size, this->accessFlags);
     if (nullptr == this->ibMR) {
         ibv_dealloc_pd(ibPD);
+        if (this->useEvent) ibv_destroy_comp_channel(this->ibCompChannel);
         ibv_close_device(this->ibCtx);
         ibv_free_device_list(devList);
         this->endpointStatus = EndpointStatus::FAIL;
@@ -96,6 +147,7 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
     if (nullptr == this->ibCQ) {
         ibv_dereg_mr(this->ibMR);
         ibv_dealloc_pd(this->ibPD);
+        if (this->useEvent) ibv_destroy_comp_channel(this->ibCompChannel);
         ibv_close_device(this->ibCtx);
         ibv_free_device_list(devList);
         this->endpointStatus = EndpointStatus::FAIL;
@@ -109,8 +161,8 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
             .send_cq = this->ibCQ,
             .recv_cq = this->ibCQ,
             .cap     = {
-                .max_send_wr  = 1,
-                .max_recv_wr  = rxDepth,
+                .max_send_wr  = this->txDepth,
+                .max_recv_wr  = this->rxDepth,
                 .max_send_sge = 1,
                 .max_recv_sge = 1
             },
@@ -123,6 +175,7 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
             ibv_destroy_cq(this->ibCQ);
             ibv_dereg_mr(this->ibMR);
             ibv_dealloc_pd(this->ibPD);
+            if (this->useEvent) ibv_destroy_comp_channel(this->ibCompChannel);
             ibv_close_device(this->ibCtx);
             ibv_free_device_list(devList);
             this->endpointStatus = EndpointStatus::FAIL;
@@ -150,6 +203,7 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
         ibv_destroy_cq(this->ibCQ);
         ibv_dereg_mr(this->ibMR);
         ibv_dealloc_pd(this->ibPD);
+        if (this->useEvent) ibv_destroy_comp_channel(this->ibCompChannel);
         ibv_close_device(this->ibCtx);
         ibv_free_device_list(devList);
         this->endpointStatus = EndpointStatus::FAIL;
@@ -178,9 +232,15 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
         if (i < rxDepth) {
             throw std::runtime_error(
                 "Couldn't post receive (" + std::to_string(i) + ")"
-                );
+            );
         }
     }
+
+    if (this->useEvent) {
+        if (ibv_req_notify_cq(this->ibCQ, 0)) {
+			throw std::runtime_error("Couldn't request CQ notification");
+		}
+    }  
 
     this->endpointStatus = EndpointStatus::INIT;
 }
@@ -193,7 +253,7 @@ void RDMAEndpoint::connect_qp() {
         .dest_qp_num	    = this->remoteIBAddr.qpn,
         .ah_attr		    = {
             .dlid		    = this->remoteIBAddr.lid,
-            .sl		        = 0,
+            .sl		        = this->ibSL,
             .src_path_bits  = 0,
             .is_global	    = 0,
             .port_num	    = this->ibPort
@@ -553,9 +613,22 @@ void RDMAEndpoint::pollCompletion(int tag) {
         this->wcQueueMap[tag].pop();
         return;
     }
+
     int ne, wcSize = 5;
     ibv_wc wc, wcs[wcSize];
     do {
+        if (this->useEvent) {
+            ibv_cq *ev_cq;
+            void   *ev_ctx;
+            if (ibv_get_cq_event(this->ibCompChannel, &ev_cq, &ev_ctx)) {
+                throw std::runtime_error("Fail to get CQ event.");
+            }
+            ibv_ack_cq_events(ev_cq, 1);
+            if (ibv_req_notify_cq(ev_cq, 0)) {
+                throw std::runtime_error("Fail to request CQ notification.");
+            }
+        }
+
         ne = ibv_poll_cq(this->ibCQ, wcSize, wcs);
         if (ne < 0) {
             throw std::runtime_error("poll CQ failed " + std::to_string(ne));

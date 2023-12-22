@@ -48,12 +48,14 @@ private:
     int  sendFlags     = IBV_ACCESS_LOCAL_WRITE;
     int  gidIdx        = -1;
     bool useODP        = false;
-    ibv_context *ibCtx = nullptr;
-    ibv_pd      *ibPD  = nullptr;
-    ibv_mr      *ibMR  = nullptr;
-    ibv_cq      *ibCQ  = nullptr;
-    ibv_qp      *ibQP  = nullptr;
-    ibv_mtu      mtu;
+    bool useEvent      = false;
+    ibv_context      *ibCtx = nullptr;
+    ibv_pd           *ibPD  = nullptr;
+    ibv_mr           *ibMR  = nullptr;
+    ibv_cq           *ibCQ  = nullptr;
+    ibv_qp           *ibQP  = nullptr;
+    ibv_mtu           mtu;
+    ibv_comp_channel *ibCompChannel = nullptr;
     struct ibAddrInfo {
         int lid;
         int qpn;
@@ -70,7 +72,7 @@ private:
 public:
     RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
                  unsigned int size, int txDepth, int rxDepth, 
-                 int mtu, int sl, bool useODP);
+                 int mtu, int sl, bool useODP, bool useEvent);
 
     void connectToPeer(std::string peerHost, int peerPort);
 

@@ -25,6 +25,7 @@ int main(int argc, char *argv[]) {
     int          port          = 18515;
 	int   	     gid_idx       = 0;
     bool         use_odp       = false;
+    bool         use_event     = false;
     unsigned int size          = 8;
     void        *buf           = nullptr;  
     std::string  ib_devname    = "";
@@ -69,6 +70,9 @@ int main(int argc, char *argv[]) {
 		case 'o':
 			use_odp = true;
 			break;
+		case 'e':
+			use_event = true;
+			break;
         default:
             usage(argv[0]);
             return 1;
@@ -96,7 +100,8 @@ int main(int argc, char *argv[]) {
     memset(buf, 0x7b, size);
 
     RDMAEndpoint ep = RDMAEndpoint(
-        ib_devname, gid_idx, buf, size, 1, 5, mtu, sl, use_odp
+        ib_devname, gid_idx, buf, size, 1, 5, 
+        mtu, sl, use_odp, use_event
     );
 
     ep.connectToPeer(server_name, port);

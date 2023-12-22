@@ -12,7 +12,7 @@ const char* RDMAEpException::what() const noexcept {
 
 RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
                            unsigned int size, int txDepth, int rxDepth, 
-                           int mtu, int sl, bool useODP) {
+                           int mtu, int sl, bool useODP, bool useEvent) {
     int                numDevices;
     ibv_device       **devList      = nullptr;
     ibv_device        *ibDev        = nullptr;
@@ -23,6 +23,7 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
     this->txDepth      = txDepth;
     this->rxDepth      = rxDepth;
     this->gidIdx       = gidIdx;
+    this->useODP       = useODP;
     this->useODP       = useODP;
 
     switch(mtu) {
@@ -74,10 +75,21 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
         this->endpointStatus = EndpointStatus::FAIL;
         throw std::runtime_error("Fail to open IB device");
     }
+    
+    if (this->useEvent) {
+        this->ibCompChannel = ibv_create_comp_channel(this->ibCtx);
+        if (this->ibCompChannel == nullptr) {
+            ibv_close_device(this->ibCtx);
+            ibv_free_device_list(devList);
+            this->endpointStatus = EndpointStatus::FAIL;
+            throw std::runtime_error("Fail to create completion channel");
+        }
+    }
 
     /* 分配Protection Domain */
     this->ibPD = ibv_alloc_pd(this->ibCtx);
     if (nullptr == this->ibPD) {
+        if (this->useEvent) ibv_destroy_comp_channel(this->ibCompChannel);
         ibv_close_device(this->ibCtx);
         ibv_free_device_list(devList);
         this->endpointStatus = EndpointStatus::FAIL;
@@ -103,6 +115,7 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
     this->ibMR = ibv_reg_mr(this->ibPD, buf, size, this->accessFlags);
     if (nullptr == this->ibMR) {
         ibv_dealloc_pd(ibPD);
+        if (this->useEvent) ibv_destroy_comp_channel(this->ibCompChannel);
         ibv_close_device(this->ibCtx);
         ibv_free_device_list(devList);
         this->endpointStatus = EndpointStatus::FAIL;
@@ -114,6 +127,7 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
     if (nullptr == this->ibCQ) {
         ibv_dereg_mr(this->ibMR);
         ibv_dealloc_pd(this->ibPD);
+        if (this->useEvent) ibv_destroy_comp_channel(this->ibCompChannel);
         ibv_close_device(this->ibCtx);
         ibv_free_device_list(devList);
         this->endpointStatus = EndpointStatus::FAIL;
@@ -141,6 +155,7 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
             ibv_destroy_cq(this->ibCQ);
             ibv_dereg_mr(this->ibMR);
             ibv_dealloc_pd(this->ibPD);
+            if (this->useEvent) ibv_destroy_comp_channel(this->ibCompChannel);
             ibv_close_device(this->ibCtx);
             ibv_free_device_list(devList);
             this->endpointStatus = EndpointStatus::FAIL;
@@ -168,6 +183,7 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
         ibv_destroy_cq(this->ibCQ);
         ibv_dereg_mr(this->ibMR);
         ibv_dealloc_pd(this->ibPD);
+        if (this->useEvent) ibv_destroy_comp_channel(this->ibCompChannel);
         ibv_close_device(this->ibCtx);
         ibv_free_device_list(devList);
         this->endpointStatus = EndpointStatus::FAIL;
@@ -196,9 +212,15 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
         if (i < rxDepth) {
             throw std::runtime_error(
                 "Couldn't post receive (" + std::to_string(i) + ")"
-                );
+            );
         }
     }
+
+    if (this->useEvent) {
+        if (ibv_req_notify_cq(this->ibCQ, 0)) {
+			throw std::runtime_error("Couldn't request CQ notification");
+		}
+    }  
 
     this->endpointStatus = EndpointStatus::INIT;
 }
@@ -571,9 +593,22 @@ void RDMAEndpoint::pollCompletion(int tag) {
         this->wcQueueMap[tag].pop();
         return;
     }
+
     int ne, wcSize = 5;
     ibv_wc wc, wcs[wcSize];
     do {
+        if (this->useEvent) {
+            ibv_cq *ev_cq;
+            void   *ev_ctx;
+            if (ibv_get_cq_event(this->ibCompChannel, &ev_cq, &ev_ctx)) {
+                throw std::runtime_error("Fail to get CQ event.");
+            }
+            ibv_ack_cq_events(ev_cq, 1);
+            if (ibv_req_notify_cq(ev_cq, 0)) {
+                throw std::runtime_error("Fail to request CQ notification.");
+            }
+        }
+
         ne = ibv_poll_cq(this->ibCQ, wcSize, wcs);
         if (ne < 0) {
             throw std::runtime_error("poll CQ failed " + std::to_string(ne));

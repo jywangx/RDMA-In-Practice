@@ -245,6 +245,16 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
     this->endpointStatus = EndpointStatus::INIT;
 }
 
+RDMAEndpoint::~RDMAEndpoint() {
+    if (this->endpointStatus != EndpointStatus::FAIL) {
+        ibv_destroy_qp(this->ibQP);
+        ibv_destroy_cq(this->ibCQ);
+        ibv_dereg_mr(this->ibMR);
+        ibv_dealloc_pd(this->ibPD);
+        ibv_close_device(this->ibCtx);
+    }
+}
+
 void RDMAEndpoint::connect_qp() {
     ibv_qp_attr attr = {
         .qp_state		    = IBV_QPS_RTR,
@@ -500,13 +510,11 @@ void RDMAEndpoint::connectToPeer(std::string peerHost, int peerPort) {
     char               gidStr[33];
     ibv_port_attr      port_attr;
     if (ibv_query_port(this->ibCtx, this->ibPort, &port_attr) != 0) {
-        this->endpointStatus = EndpointStatus::FAIL;
         throw std::runtime_error("Couldn't get port info.");
     }
     /* lid */
     this->localIBAddr.lid = port_attr.lid;
     if (port_attr.link_layer != IBV_LINK_LAYER_ETHERNET && !port_attr.lid) {
-        this->endpointStatus = EndpointStatus::FAIL;
         throw std::runtime_error("Couldn't get local LID.");
     }
     /* gid */
@@ -514,7 +522,6 @@ void RDMAEndpoint::connectToPeer(std::string peerHost, int peerPort) {
         if (0 != ibv_query_gid(
             this->ibCtx, this->ibPort, this->gidIdx, &this->localIBAddr.gid
             )) {
-            this->endpointStatus = EndpointStatus::FAIL;
             throw std::runtime_error(
                 "can't read sgid of index " + std::to_string(this->gidIdx)
             );

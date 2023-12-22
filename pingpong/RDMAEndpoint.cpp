@@ -251,6 +251,7 @@ RDMAEndpoint::~RDMAEndpoint() {
         ibv_destroy_cq(this->ibCQ);
         ibv_dereg_mr(this->ibMR);
         ibv_dealloc_pd(this->ibPD);
+        if (this->useEvent) ibv_destroy_comp_channel(this->ibCompChannel);
         ibv_close_device(this->ibCtx);
     }
 }

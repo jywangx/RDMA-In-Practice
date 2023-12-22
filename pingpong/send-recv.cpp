@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
     int          sl            = 0;
     int          mtu           = 1024;
     int          port          = 18515;
-	int   	     gid_idx       = 0;
+  	int   	     gid_idx       = 0;
     bool         use_odp       = false;
     bool         use_event     = false;
     unsigned int size          = 8;

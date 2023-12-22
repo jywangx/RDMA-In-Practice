@@ -46,6 +46,26 @@ RDMAEndpoint::RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
             throw std::runtime_error("Invalid MTU: " + std::to_string(mtu));
     }
 
+    switch(mtu) {
+        case 256:
+            this->mtu = IBV_MTU_256;
+            break;
+        case 512:
+            this->mtu = IBV_MTU_512;
+            break;
+        case 1024:
+            this->mtu = IBV_MTU_1024;
+            break;
+        case 2048:
+            this->mtu = IBV_MTU_2048;
+            break;
+        case 4096:
+            this->mtu = IBV_MTU_4096;
+            break;
+        default:
+            throw std::runtime_error("Invalid MTU: " + std::to_string(mtu));
+    }
+
     devList = ibv_get_device_list(&numDevices);
     if (nullptr == devList) {
         this->endpointStatus = EndpointStatus::FAIL;

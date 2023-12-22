@@ -67,6 +67,8 @@ public:
     RDMAEndpoint(std::string deviceName, int gidIdx, void* buf,
                  unsigned int size, int txDepth, int rxDepth);
 
+    ~RDMAEndpoint();
+
     void connectToPeer(std::string peerHost, int peerPort);
 
     void postSend();
